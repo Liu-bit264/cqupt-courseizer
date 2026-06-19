@@ -1,0 +1,9 @@
+[project]
+name = "cqupt-courseizer"
+version = "0.2.0"
+requires-python = ">=3.14"
+dependencies = [
+    "flet>=0.24",
+    "textual>=1.0",
+    "requests>=2.28",
+]

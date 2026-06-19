@@ -5,10 +5,10 @@ import time
 
 class Queryer:
     def __init__(self):
-        self.ls = []
-        self.ld = []
+        self.courses = []
+        self.matched_courses = []
 
-    def request(self, query_str, cookie):
+    def _fetch(self, query_str, cookie):
         # 添加错误处理和重试机制
         max_retries = 3
         retry_count = 0
@@ -71,51 +71,52 @@ class Queryer:
         
         return None
 
-    def all_renwen(self, cookie):
-        body_data = self.request("jctsRw", cookie)
+    def fetch_humanities(self, cookie):
+        body_data = self._fetch("jctsRw", cookie)
         if body_data:
-            class_info = ClassInfos.from_dict(body_data)
+            class_info = CourseListResponse.from_dict(body_data)
             for item in class_info.data:
-                load = self.create_load_string(item)
+                load = self._build_post_data(item)
                 # self.write2file("./output_renwen.txt", load)
-                self.write2ls(load)
+                self._add_course(load)
 
-    def all_ziran(self, cookie):
-        body_data = self.request("jctsZr", cookie)
+    def fetch_sciences(self, cookie):
+        body_data = self._fetch("jctsZr", cookie)
         if body_data:
-            class_info = ClassInfos.from_dict(body_data)
+            class_info = CourseListResponse.from_dict(body_data)
             for item in class_info.data:
-                load = self.create_load_string(item)
+                load = self._build_post_data(item)
                 # self.write2file("./output_ziran.txt", load)
-                self.write2ls(load)
+                self._add_course(load)
 
-    def all_banji(self, cookie):
-        body_data = self.request("bj", cookie)
+    def fetch_class_courses(self, cookie):
+        body_data = self._fetch("bj", cookie)
         if body_data:
-            class_info = ClassInfos.from_dict(body_data)
+            class_info = CourseListResponse.from_dict(body_data)
             for item in class_info.data:
-                load = self.create_load_string(item)
+                load = self._build_post_data(item)
                 # self.write2file("./output_banji.txt", load)
-                self.write2ls(load)
+                self._add_course(load)
 
-    def create_load_string(self, item):
-        load_string = f"xnxq={item.xnxq}&jxb={item.jxb}&kchb={item.kcbh}&kcmc={item.kcmc}&xf={item.xf}&teaname={item.tea_name}&rslimit={item.rs_limit}&kclb={item.kclb}&kchtye={item.kch_type}&memo={item.memo}"
+    def _build_post_data(self, item):
+        # POST 参数名来自教务系统 API，与 Python 属性名不对齐是故意的（如 kchb→course_code, teaname→teacher 等）
+        load_string = f"xnxq={item.semester}&jxb={item.class_id}&kchb={item.course_code}&kcmc={item.course_name}&xf={item.credits}&teaname={item.teacher}&rslimit={item.enrollment_limit}&kclb={item.kclb}&kchtye={item.kch_type}&memo={item.memo}"
         return load_string
 
     def write2file(self, file_path, content):
         with open(file_path, "a", encoding="utf-8") as file:
             file.write(content + "\n")
 
-    def write2ls(self, content):
-        self.ls.append(content)
+    def _add_course(self, content):
+        self.courses.append(content)
     
-    def ls2ld(self, search_str_ls):
+    def filter_by_keywords(self, search_str_ls):
         for j in range(len(search_str_ls)):
-            for i in self.ls:
+            for i in self.courses:
                 if search_str_ls[j] in i:
-                    self.ld.append(i)
+                    self.matched_courses.append(i)
 
-class ClassInfos:
+class CourseListResponse:
     def __init__(self, code, info, data):
         self.code = code
         self.info = info
@@ -123,20 +124,23 @@ class ClassInfos:
 
     @classmethod
     def from_dict(cls, data):
-        # Parsing the data into a ClassInfos object
+        # Parsing the API response into a CourseListResponse object
         data_items = [ClassInfoItem.from_dict(item) for item in data['data']]
         return cls(code=data['code'], info=data['info'], data=data_items)
 
 
 class ClassInfoItem:
-    def __init__(self, xnxq, jxb, kcbh, kcmc, xf, tea_name, rs_limit, kclb, kch_type, memo):
-        self.xnxq = xnxq
-        self.jxb = jxb
-        self.kcbh = kcbh
-        self.kcmc = kcmc
-        self.xf = xf
-        self.tea_name = tea_name
-        self.rs_limit = rs_limit
+    def __init__(self, semester, class_id, course_code, course_name, credits, teacher, enrollment_limit,
+                 kclb,  # TODO: 确认字段含义，暂用拼音缩写
+                 kch_type,  # TODO: 确认字段含义，暂用拼音缩写
+                 memo):  # 备注
+        self.semester = semester
+        self.class_id = class_id
+        self.course_code = course_code
+        self.course_name = course_name
+        self.credits = credits
+        self.teacher = teacher
+        self.enrollment_limit = enrollment_limit
         self.kclb = kclb
         self.kch_type = kch_type
         self.memo = memo
@@ -144,13 +148,13 @@ class ClassInfoItem:
     @classmethod
     def from_dict(cls, item):
         return cls(
-            xnxq=item['xnxq'],
-            jxb=item['jxb'],
-            kcbh=item['kcbh'],
-            kcmc=item['kcmc'],
-            xf=item['xf'],
-            tea_name=item['teaName'],
-            rs_limit=item['rsLimit'],
+            semester=item['xnxq'],
+            class_id=item['jxb'],
+            course_code=item['kcbh'],
+            course_name=item['kcmc'],
+            credits=item['xf'],
+            teacher=item['teaName'],
+            enrollment_limit=item['rsLimit'],
             kclb=item['kclb'],
             kch_type=item['kchType'],
             memo=item['memo']
